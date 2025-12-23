@@ -34,7 +34,7 @@ PORT="${PORT:-3000}"
 NODE_URL=""
 NODE_NAME="${NODE_NAME:-Agent Node}"
 NODE_LOCATION="${NODE_LOCATION:-Unknown}"
-IMAGE="${IMAGE:-netmirror:latest}"
+IMAGE="${IMAGE:-soyorins/netmirror-agent:latest}"
 DEPLOY_DIR="${DEPLOY_DIR:-./netmirror-agent}"
 
 # Helper functions

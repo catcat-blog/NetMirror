@@ -1,0 +1,52 @@
+# NetMirror Agent Image - API only, no frontend
+# Optimized multi-stage build for smaller image size
+
+# Go dependency cache layer
+FROM alpine:3 AS go-deps-cache
+RUN apk add --no-cache go git ca-certificates
+WORKDIR /app
+ADD backend/go.mod backend/go.sum ./
+RUN go mod download
+
+# Go build layer (without frontend files)
+FROM go-deps-cache AS go-builder
+ADD backend /app
+# Create empty embed/ui directory to satisfy go:embed requirement
+RUN mkdir -p /app/embed/ui && touch /app/embed/ui/.gitkeep
+RUN go build -ldflags="-w -s" -o /usr/local/bin/als && chmod +x /usr/local/bin/als
+
+# System tools layer (reusable)
+FROM alpine:3 AS system-tools
+WORKDIR /app
+ADD scripts /app
+RUN sh /app/install-software.sh && \
+    sh /app/install-speedtest.sh && \
+    apk add --no-cache \
+        iperf iperf3 \
+        mtr \
+        traceroute \
+        iputils \
+        ca-certificates \
+        tzdata && \
+    rm -rf /app
+
+# Final runtime image
+FROM alpine:3
+LABEL org.opencontainers.image.title="NetMirror Agent"
+LABEL org.opencontainers.image.description="NetMirror agent node (API only, no UI)"
+LABEL org.opencontainers.image.source="https://github.com/Yuri-NagaSaki/NetMirror"
+LABEL org.opencontainers.image.licenses="MIT"
+
+# Copy system tools and binary
+COPY --from=system-tools / /
+COPY --from=go-builder /usr/local/bin/als /bin/als
+
+# Agent mode enabled by default
+ENV AGENT_MODE=true
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD wget --quiet --tries=1 --spider http://localhost:${HTTP_PORT:-3000}/ || exit 1
+
+CMD ["/bin/als"]

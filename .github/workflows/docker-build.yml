@@ -1,41 +1,41 @@
-
 name: Build and Push Docker Images
 
 on:
   push:
-    branches: 
+    branches:
       - main
       - master
     tags:
       - 'v*'
   pull_request:
-    branches: 
+    branches:
       - main
       - master
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: netmirror
 
 jobs:
-  build:
+  build-panel:
+    name: Build Panel Image (${{ matrix.arch }})
     strategy:
       matrix:
         include:
-          - runs-on: [self-hosted, Linux, X64]
+          - runs-on: blacksmith-8vcpu-ubuntu-2204
             arch: amd64
             platform: linux/amd64
-          - runs-on: [self-hosted, Linux, ARM64]
+          - runs-on: blacksmith-8vcpu-ubuntu-2204-arm
             arch: arm64
             platform: linux/arm64
     runs-on: ${{ matrix.runs-on }}
     steps:
       - name: Check runner info
         run: |
+          echo "Building Panel image"
           echo "Architecture: ${{ matrix.arch }}"
           echo "Platform: ${{ matrix.platform }}"
           uname -a
-          
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -50,26 +50,83 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract metadata
+      - name: Extract metadata (Panel)
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/netmirror-panel
           tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && matrix.arch == 'amd64' }}
+            type=raw,value=latest-${{ matrix.arch }},enable=${{ github.ref == 'refs/heads/main' }}
             type=ref,event=branch,suffix=-${{ matrix.arch }}
             type=ref,event=pr,suffix=-${{ matrix.arch }}
             type=semver,pattern={{version}},suffix=-${{ matrix.arch }}
             type=semver,pattern={{major}}.{{minor}},suffix=-${{ matrix.arch }}
             type=semver,pattern={{major}},suffix=-${{ matrix.arch }}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && matrix.arch == 'amd64' }}
-            type=raw,value=main-${{ matrix.arch }},enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=latest-${{ matrix.arch }},enable=${{ github.ref == 'refs/heads/main' }}
 
-      - name: Build and push
+      - name: Build and push Panel
         uses: useblacksmith/build-push-action@v2
         with:
           context: .
           file: ./Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  build-agent:
+    name: Build Agent Image (${{ matrix.arch }})
+    strategy:
+      matrix:
+        include:
+          - runs-on: blacksmith-2vcpu-ubuntu-2204
+            arch: amd64
+            platform: linux/amd64
+          - runs-on: blacksmith-2vcpu-ubuntu-2204-arm
+            arch: arm64
+            platform: linux/arm64
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - name: Check runner info
+        run: |
+          echo "Building Agent image"
+          echo "Architecture: ${{ matrix.arch }}"
+          echo "Platform: ${{ matrix.platform }}"
+          uname -a
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Blacksmith Builder
+        uses: useblacksmith/setup-docker-builder@v1
+
+      - name: Login to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata (Agent)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/netmirror-agent
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && matrix.arch == 'amd64' }}
+            type=raw,value=latest-${{ matrix.arch }},enable=${{ github.ref == 'refs/heads/main' }}
+            type=ref,event=branch,suffix=-${{ matrix.arch }}
+            type=ref,event=pr,suffix=-${{ matrix.arch }}
+            type=semver,pattern={{version}},suffix=-${{ matrix.arch }}
+            type=semver,pattern={{major}}.{{minor}},suffix=-${{ matrix.arch }}
+            type=semver,pattern={{major}},suffix=-${{ matrix.arch }}
+
+      - name: Build and push Agent
+        uses: useblacksmith/build-push-action@v2
+        with:
+          context: .
+          file: ./Dockerfile.agent
           platforms: ${{ matrix.platform }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}

@@ -30,7 +30,7 @@ NODE_LOCATION="{{.NodeLocation}}"
 
 # User-configurable via environment variables
 PORT="${PORT:-3000}"
-IMAGE="${IMAGE:-soyorins/netmirror:latest}"
+IMAGE="${IMAGE:-soyorins/netmirror-agent:latest}"
 DEPLOY_DIR="${DEPLOY_DIR:-./netmirror-node}"
 
 # Helper functions
