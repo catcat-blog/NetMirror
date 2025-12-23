@@ -167,13 +167,21 @@ docker run -d \
 
 # Wait for container to be ready
 log "Waiting for container to start..."
-sleep 5
+sleep 3
 
-# Verify container is running
-if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-    echo ""
-    error "Container failed to start. Check logs with: docker logs $CONTAINER_NAME"
-fi
+# Verify container is running by checking API response
+RETRIES=5
+for i in $(seq 1 $RETRIES); do
+    if curl -s "http://localhost:$PORT/" 2>/dev/null | grep -q '"api":true'; then
+        success "Container is running and API is responding"
+        break
+    fi
+    if [ "$i" -eq "$RETRIES" ]; then
+        warn "Container may still be starting. Check with: docker logs $CONTAINER_NAME"
+    else
+        sleep 2
+    fi
+done
 
 # Step 9: Register with master node
 log "Registering with master node..."

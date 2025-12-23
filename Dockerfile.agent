@@ -47,6 +47,6 @@ ENV AGENT_MODE=true
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --quiet --tries=1 --spider http://localhost:${HTTP_PORT:-3000}/ || exit 1
+    CMD wget -q -O /dev/null http://localhost:${HTTP_PORT:-3000}/ || exit 1
 
 CMD ["/bin/als"]

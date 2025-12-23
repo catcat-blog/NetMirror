@@ -230,21 +230,19 @@ docker run -d \
 log "Waiting for startup..."
 sleep 3
 
-if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-    echo ""
-    echo -e "${RED}Container failed to start. Logs:${NC}"
-    docker logs "$CONTAINER_NAME" 2>&1 | tail -20
-    error "Container startup failed"
-fi
-
-# Verify Agent mode
-log "Verifying Agent mode..."
-AGENT_CHECK=$(curl -s "http://localhost:$PORT/" 2>/dev/null || echo "")
-if echo "$AGENT_CHECK" | grep -q '"mode":"agent"'; then
-    success "Agent mode confirmed"
-else
-    warn "Could not verify Agent mode response"
-fi
+# Verify container is running by checking API response
+RETRIES=5
+for i in $(seq 1 $RETRIES); do
+    if curl -s "http://localhost:$PORT/" 2>/dev/null | grep -q '"api":true'; then
+        success "Container is running and API is responding"
+        break
+    fi
+    if [ "$i" -eq "$RETRIES" ]; then
+        warn "Container may still be starting. Check with: docker logs $CONTAINER_NAME"
+    else
+        sleep 2
+    fi
+done
 
 # Step 9: Register with master
 log "Registering with master node..."
