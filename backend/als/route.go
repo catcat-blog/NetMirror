@@ -40,62 +40,49 @@ func SetupHttpRoute(e *gin.Engine) {
 
 	e.GET("/session", session.Handle)
 	
-	// BGP graph proxy endpoint with 24-hour caching
-	e.GET("/bgp/graph/:asn/:type", func(c *gin.Context) {
+	// BGP data proxy endpoint using RIPE Stat API with 24-hour caching
+	e.GET("/bgp/data/:asn", func(c *gin.Context) {
 		asn := c.Param("asn")
-		graphType := c.Param("type") // combined, ipv4, ipv6
-		
+
 		// Check cache first
-		if cachedData, found := config.GetBGPGraphCached(asn, graphType); found {
-			c.Header("Content-Type", "image/svg+xml")
-			c.Header("Cache-Control", "public, max-age=86400") // Cache for 24 hours
+		if cachedData, found := config.GetBGPGraphCached(asn, "neighbours"); found {
+			c.Header("Content-Type", "application/json")
+			c.Header("Cache-Control", "public, max-age=86400")
 			c.Header("X-Cache", "HIT")
-			c.Data(200, "image/svg+xml", cachedData)
+			c.Data(200, "application/json", cachedData)
 			return
 		}
-		
-		// Construct BGPView URL
-		var url string
-		switch graphType {
-		case "ipv4":
-			url = fmt.Sprintf("https://api.bgpview.io/assets/graphs/AS%s_IPv4.svg", asn)
-		case "ipv6":
-			url = fmt.Sprintf("https://api.bgpview.io/assets/graphs/AS%s_IPv6.svg", asn)
-		case "combined":
-			url = fmt.Sprintf("https://api.bgpview.io/assets/graphs/AS%s_Combined.svg", asn)
-		default:
-			c.JSON(400, gin.H{"error": "Invalid graph type"})
-			return
-		}
-		
-		// Fetch SVG from BGPView
+
+		// Fetch from RIPE Stat API
+		url := fmt.Sprintf("https://stat.ripe.net/data/asn-neighbours/data.json?resource=AS%s&sourceapp=NetMirror", asn)
+
 		resp, err := http.Get(url)
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to fetch BGP graph"})
+			c.JSON(500, gin.H{"error": "Failed to fetch BGP data from RIPE Stat"})
 			return
 		}
 		defer resp.Body.Close()
-		
+
 		if resp.StatusCode != 200 {
-			c.JSON(resp.StatusCode, gin.H{"error": "BGP graph not found"})
+			c.JSON(resp.StatusCode, gin.H{"error": "BGP data not found"})
 			return
 		}
-		
+
 		// Read response data
 		data, err := io.ReadAll(resp.Body)
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to read BGP graph data"})
+			c.JSON(500, gin.H{"error": "Failed to read BGP data"})
 			return
 		}
-		
+
 		// Cache the result for 24 hours
-		config.SetBGPGraphCache(asn, graphType, data)
-		
-		// Set proper headers and return the SVG
-		c.Header("Content-Type", "image/svg+xml")
-		c.Header("Cache-Control", "public, max-age=86400") // Cache for 24 hours
+		config.SetBGPGraphCache(asn, "neighbours", data)
+
+		// Return the JSON data
+		c.Header("Content-Type", "application/json")
+		c.Header("Cache-Control", "public, max-age=86400")
 		c.Header("X-Cache", "MISS")
-		c.Data(200, "image/svg+xml", data)
+		c.Data(200, "application/json", data)
 	})
 	
 	// Node management endpoints (no session required for cross-node functionality)

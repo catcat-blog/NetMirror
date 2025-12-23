@@ -10,56 +10,41 @@
               {{ getBGPDescription() }}
             </p>
           </div>
-          <div class="flex space-x-2">
-            <button
-              @click="bgpGraphType = 'combined'"
-              :class="bgpGraphType === 'combined' 
-                ? 'bg-primary-500 text-white shadow-primary-500/25' 
-                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'"
-              class="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-sm"
+          <div v-if="currentConfig?.asn" class="flex items-center space-x-3">
+            <span class="px-3 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full text-sm font-medium">
+              {{ currentConfig.asn }}
+            </span>
+            <a
+              :href="`https://stat.ripe.net/AS${asnNumber}`"
+              target="_blank"
+              class="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium flex items-center transition-colors text-sm"
             >
-              Combined
-            </button>
-            <button
-              @click="bgpGraphType = 'ipv4'"
-              :class="bgpGraphType === 'ipv4' 
-                ? 'bg-primary-500 text-white shadow-primary-500/25' 
-                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'"
-              class="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-sm"
-            >
-              IPv4
-            </button>
-            <button
-              @click="bgpGraphType = 'ipv6'"
-              :class="bgpGraphType === 'ipv6' 
-                ? 'bg-primary-500 text-white shadow-primary-500/25' 
-                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'"
-              class="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-sm"
-            >
-              IPv6
-            </button>
+              View on RIPE Stat
+              <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+              </svg>
+            </a>
           </div>
         </div>
       </div>
 
-      <!-- BGP Graph Display -->
-      <div class="bg-white dark:bg-gray-800 rounded-xl p-6 min-h-[500px] flex items-center justify-center border border-gray-200 dark:border-gray-700">
+      <!-- BGP Data Display -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
         <!-- Loading State -->
-        <div v-if="bgpGraphLoading" class="text-center">
+        <div v-if="bgpLoading" class="p-12 text-center">
           <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-primary-500 border-t-transparent"></div>
-          <p class="mt-4 text-lg text-gray-600 dark:text-gray-400">Loading BGP topology...</p>
-          <p class="text-sm text-gray-500 dark:text-gray-500 mt-2">{{ currentGraphName }}</p>
+          <p class="mt-4 text-lg text-gray-600 dark:text-gray-400">Loading BGP neighbours...</p>
         </div>
 
         <!-- Error State -->
-        <div v-else-if="bgpGraphError" class="text-center text-red-600 dark:text-red-400">
+        <div v-else-if="bgpError" class="p-12 text-center text-red-600 dark:text-red-400">
           <svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
           </svg>
-          <p class="text-lg font-medium mb-2">Failed to load BGP topology</p>
-          <p class="text-sm text-gray-500 mb-4">{{ bgpGraphUrl }}</p>
-          <button 
-            @click="loadBGPGraph"
+          <p class="text-lg font-medium mb-2">Failed to load BGP data</p>
+          <p class="text-sm text-gray-500 mb-4">{{ bgpErrorMessage }}</p>
+          <button
+            @click="loadBGPData"
             class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
           >
             Retry
@@ -67,7 +52,7 @@
         </div>
 
         <!-- No ASN State -->
-        <div v-else-if="!currentConfig?.asn" class="text-center text-gray-500 dark:text-gray-400">
+        <div v-else-if="!currentConfig?.asn" class="p-12 text-center text-gray-500 dark:text-gray-400">
           <svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
           </svg>
@@ -75,36 +60,96 @@
           <p class="text-sm">BGP topology requires ASN data to be available</p>
         </div>
 
-        <!-- Success State -->
-        <div v-else-if="bgpGraphContent" class="w-full flex justify-center">
-          <div class="w-full max-w-full overflow-auto">
-            <div 
-              v-html="bgpGraphContent" 
-              class="text-center bgp-graph-container"
-            ></div>
+        <!-- Success State - Neighbours Table -->
+        <div v-else-if="bgpData" class="overflow-hidden">
+          <!-- Summary Stats -->
+          <div class="grid grid-cols-3 gap-4 p-4 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
+            <div class="text-center">
+              <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ upstreamCount }}</p>
+              <p class="text-sm text-gray-600 dark:text-gray-400">Upstream</p>
+            </div>
+            <div class="text-center">
+              <p class="text-2xl font-bold text-green-600 dark:text-green-400">{{ peerCount }}</p>
+              <p class="text-sm text-gray-600 dark:text-gray-400">Peers</p>
+            </div>
+            <div class="text-center">
+              <p class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ downstreamCount }}</p>
+              <p class="text-sm text-gray-600 dark:text-gray-400">Downstream</p>
+            </div>
           </div>
-        </div>
-      </div>
 
-      <!-- Graph Info -->
-      <div v-if="bgpGraphContent && currentConfig?.asn" class="mt-4 p-4 bg-primary-50/50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-700/30">
-        <div class="flex items-center justify-between text-sm">
-          <div class="text-gray-600 dark:text-gray-400">
-            <span class="font-medium">Current view:</span> {{ currentGraphName }}
+          <!-- Neighbours Table -->
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead class="bg-gray-50 dark:bg-gray-900/50">
+                <tr>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ASN</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Type</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Power</th>
+                  <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">IPv4</th>
+                  <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">IPv6</th>
+                  <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                <tr
+                  v-for="neighbour in sortedNeighbours"
+                  :key="neighbour.asn"
+                  class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                >
+                  <td class="px-4 py-3">
+                    <span class="font-mono font-medium text-gray-900 dark:text-white">AS{{ neighbour.asn }}</span>
+                  </td>
+                  <td class="px-4 py-3">
+                    <span
+                      class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                      :class="getTypeClasses(neighbour.type)"
+                    >
+                      {{ getTypeLabel(neighbour.type) }}
+                    </span>
+                  </td>
+                  <td class="px-4 py-3">
+                    <div class="flex items-center">
+                      <div class="w-16 bg-gray-200 dark:bg-gray-700 rounded-full h-2 mr-2">
+                        <div
+                          class="h-2 rounded-full transition-all duration-300"
+                          :class="getPowerColor(neighbour.power)"
+                          :style="{ width: `${Math.round(neighbour.power * 100)}%` }"
+                        ></div>
+                      </div>
+                      <span class="text-sm text-gray-600 dark:text-gray-400">{{ (neighbour.power * 100).toFixed(0) }}%</span>
+                    </div>
+                  </td>
+                  <td class="px-4 py-3 text-center">
+                    <span v-if="neighbour.v4_peers > 0" class="inline-flex items-center justify-center w-6 h-6 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full text-xs font-medium">
+                      {{ neighbour.v4_peers }}
+                    </span>
+                    <span v-else class="text-gray-400 dark:text-gray-600">-</span>
+                  </td>
+                  <td class="px-4 py-3 text-center">
+                    <span v-if="neighbour.v6_peers > 0" class="inline-flex items-center justify-center w-6 h-6 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full text-xs font-medium">
+                      {{ neighbour.v6_peers }}
+                    </span>
+                    <span v-else class="text-gray-400 dark:text-gray-600">-</span>
+                  </td>
+                  <td class="px-4 py-3 text-right">
+                    <a
+                      :href="`https://stat.ripe.net/AS${neighbour.asn}`"
+                      target="_blank"
+                      class="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 text-sm font-medium transition-colors"
+                    >
+                      View
+                    </a>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <div class="text-gray-600 dark:text-gray-400">
-            <span class="font-medium">ASN:</span> {{ currentConfig.asn }}
+
+          <!-- Query Time Info -->
+          <div v-if="queryTime" class="px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+            Data from RIPE Stat | Query time: {{ queryTime }}
           </div>
-          <a 
-            :href="`https://bgpview.io/asn/${asnNumber}`" 
-            target="_blank"
-            class="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium flex items-center transition-colors"
-          >
-            View on BGPView
-            <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-            </svg>
-          </a>
         </div>
       </div>
     </div>
@@ -120,22 +165,14 @@ const appStore = useAppStore()
 
 const {
   selectedNode,
-  hasSelectedNode,
-  selectedNodeName,
-  selectedNodeLocation,
-  isNodeReady,
-  sendRequest
 } = useNodeTool()
 
-// BGP Graph related
-const bgpGraphType = ref('combined')
-const bgpGraphContent = ref('')
-const bgpGraphOriginalContent = ref('') // Store original content for theme switching
-const bgpGraphLoading = ref(false)
-const bgpGraphError = ref(false)
-
-// Theme detection
-const isDarkMode = computed(() => appStore.theme === 'dark')
+// BGP Data related
+const bgpData = ref(null)
+const bgpLoading = ref(false)
+const bgpError = ref(false)
+const bgpErrorMessage = ref('')
+const queryTime = ref('')
 
 // Computed properties
 const asnNumber = computed(() => {
@@ -143,7 +180,6 @@ const asnNumber = computed(() => {
   return config?.asn ? config.asn.replace('AS', '') : null
 })
 
-// 获取当前节点的配置
 const currentConfig = computed(() => {
   if (selectedNode.value && selectedNode.value.config) {
     return selectedNode.value.config
@@ -151,151 +187,125 @@ const currentConfig = computed(() => {
   return appStore.config
 })
 
-const currentGraphName = computed(() => {
-  switch (bgpGraphType.value) {
-    case 'ipv4': return 'IPv4 BGP Topology'
-    case 'ipv6': return 'IPv6 BGP Topology'
-    case 'combined': return 'Combined BGP Topology'
-    default: return 'BGP Topology'
-  }
+const neighbours = computed(() => {
+  return bgpData.value?.data?.neighbours || []
 })
 
-const bgpGraphUrl = computed(() => {
+const sortedNeighbours = computed(() => {
+  return [...neighbours.value].sort((a, b) => b.power - a.power)
+})
+
+const upstreamCount = computed(() => {
+  return neighbours.value.filter(n => n.type === 'left').length
+})
+
+const downstreamCount = computed(() => {
+  return neighbours.value.filter(n => n.type === 'right').length
+})
+
+const peerCount = computed(() => {
+  return neighbours.value.filter(n => n.type === 'uncertain' || n.type === 'not-announced').length
+})
+
+const bgpDataUrl = computed(() => {
   if (!asnNumber.value) return null
-  
-  // 构建API请求URL - 如果有选中的节点，则请求节点的BGP端点
   const baseUrl = selectedNode.value ? selectedNode.value.url : ''
-  
-  switch (bgpGraphType.value) {
-    case 'ipv4':
-      return `${baseUrl}/bgp/graph/${asnNumber.value}/ipv4`
-    case 'ipv6':
-      return `${baseUrl}/bgp/graph/${asnNumber.value}/ipv6`
-    case 'combined':
-      return `${baseUrl}/bgp/graph/${asnNumber.value}/combined`
-    default:
-      return `${baseUrl}/bgp/graph/${asnNumber.value}/combined`
-  }
+  return `${baseUrl}/bgp/data/${asnNumber.value}`
 })
 
-// Auto load graph when ASN becomes available or when node changes
+// Auto load data when ASN becomes available
 watch(() => currentConfig.value?.asn, (newAsn) => {
   if (newAsn) {
-    loadBGPGraph()
+    loadBGPData()
   }
 }, { immediate: true })
 
-// Watch for selected node changes and reload graph
+// Watch for selected node changes
 watch(() => selectedNode.value, (newNode, oldNode) => {
   if (newNode !== oldNode && currentConfig.value?.asn) {
-    console.log('Node changed, reloading BGP graph for:', newNode?.name)
-    loadBGPGraph()
+    loadBGPData()
   }
 }, { immediate: false })
 
-// Watch for graph type changes
-watch(bgpGraphType, () => {
-  if (bgpGraphUrl.value) {
-    loadBGPGraph()
-  }
-})
+const loadBGPData = async () => {
+  if (!bgpDataUrl.value) return
 
-// Watch for theme changes and reprocess existing content (no reload)
-watch(() => appStore.theme, () => {
-  if (bgpGraphOriginalContent.value && bgpGraphOriginalContent.value.includes('<svg')) {
-    // Reprocess original SVG content for new theme
-    if (isDarkMode.value) {
-      bgpGraphContent.value = processSvgForDarkMode(bgpGraphOriginalContent.value)
-    } else {
-      // Use original content for light mode
-      bgpGraphContent.value = bgpGraphOriginalContent.value
-    }
-  }
-})
+  bgpLoading.value = true
+  bgpError.value = false
+  bgpErrorMessage.value = ''
+  bgpData.value = null
 
-const loadBGPGraph = async () => {
-  if (!bgpGraphUrl.value) return
-  
-  bgpGraphLoading.value = true
-  bgpGraphError.value = false
-  bgpGraphContent.value = ''
-  bgpGraphOriginalContent.value = ''
-  
-  console.log('Loading BGP graph from:', bgpGraphUrl.value)
-  
   try {
-    // 基本的fetch请求，不需要特殊的session头
-    const response = await fetch(bgpGraphUrl.value)
-    console.log('BGP graph response status:', response.status)
-    
+    const response = await fetch(bgpDataUrl.value)
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`)
     }
-    
-    let svgContent = await response.text()
-    console.log('BGP graph loaded, content length:', svgContent.length)
-    
-    if (svgContent.includes('<svg')) {
-      // Store original content
-      bgpGraphOriginalContent.value = svgContent
-      
-      // Apply theme processing if needed
-      if (isDarkMode.value) {
-        bgpGraphContent.value = processSvgForDarkMode(svgContent)
-      } else {
-        bgpGraphContent.value = svgContent
-      }
+
+    const data = await response.json()
+
+    if (data.status === 'ok' && data.data) {
+      bgpData.value = data
+      queryTime.value = data.query_time || ''
     } else {
-      throw new Error('Invalid SVG content')
+      throw new Error(data.messages?.join(', ') || 'Invalid response')
     }
   } catch (error) {
-    console.error('Failed to load BGP graph:', error)
-    bgpGraphError.value = true
+    console.error('Failed to load BGP data:', error)
+    bgpError.value = true
+    bgpErrorMessage.value = error.message
   } finally {
-    bgpGraphLoading.value = false
+    bgpLoading.value = false
   }
 }
 
-// 处理SVG以适应暗色模式
-const processSvgForDarkMode = (svgContent) => {
-  let processed = svgContent
-    // 处理BGPView特有的颜色
-    .replace(/fill="#2c94b3"/g, 'fill="#60a5fa"')     // BGPView蓝色文本 -> 更亮的蓝色
-    .replace(/fill="#880000"/g, 'fill="#ef4444"')     // 深红色 -> 红色
-    .replace(/fill="#000000"/g, 'fill="#ffffff"')     // 黑色 -> 白色
-    .replace(/stroke="#000000"/g, 'stroke="#ffffff"') // 黑色线条 -> 白色
-    
-    // 处理背景
-    .replace(/fill="#ffffff"/g, 'fill="#1f2937"')     // 白色背景 -> 深灰色
-    .replace(/polygon fill="#ffffff"/g, 'polygon fill="#1f2937"') // 多边形背景
-    
-    // 添加暗色背景到SVG根元素
-    .replace(/<svg([^>]*?)>/, '<svg$1 style="background-color: #1f2937; border-radius: 8px; padding: 10px;">')
-  
-  return processed
+const getTypeLabel = (type) => {
+  switch (type) {
+    case 'left': return 'Upstream'
+    case 'right': return 'Downstream'
+    case 'uncertain': return 'Peer'
+    case 'not-announced': return 'Peer'
+    default: return type
+  }
 }
 
-// Get BGP description for display
+const getTypeClasses = (type) => {
+  switch (type) {
+    case 'left':
+      return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+    case 'right':
+      return 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
+    case 'uncertain':
+    case 'not-announced':
+      return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+    default:
+      return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-400'
+  }
+}
+
+const getPowerColor = (power) => {
+  if (power >= 0.7) return 'bg-green-500'
+  if (power >= 0.4) return 'bg-yellow-500'
+  return 'bg-red-500'
+}
+
 const getBGPDescription = () => {
   const config = currentConfig.value
-  
+
   if (!config?.bgp && !config?.asn) {
     return 'Network topology visualization'
   }
-  
-  // If we have full BGP info, show it as is
+
   if (config.bgp) {
     return config.bgp
   }
-  
-  // If we only have ASN, show it
+
   return config.asn || 'Network topology visualization'
 }
 
-// Load graph on component mount if ASN is already available
 onMounted(() => {
   if (currentConfig.value?.asn) {
-    loadBGPGraph()
+    loadBGPData()
   }
 })
 </script>
@@ -314,13 +324,5 @@ onMounted(() => {
     transform: translateY(0);
     opacity: 1;
   }
-}
-
-/* BGP SVG 图表容器样式 */
-.bgp-graph-container :deep(svg) {
-  max-width: 100%;
-  height: auto;
-  margin: 0 auto;
-  display: block;
 }
 </style>

@@ -175,12 +175,15 @@ const generateChartIds = () => {
   }
 }
 
+const errorMessage = ref('')
+
 const startOrStopSpeedtest = (force = false) => {
   if (workerInstance != null) {
     workerInstance.postMessage('abort')
     clearInterval(workerTimer)
+    workerInstance.terminate()
     workerInstance = null
-    
+
     if (force) {
       uploadText.value = '0'
       downloadText.value = '0'
@@ -193,23 +196,54 @@ const startOrStopSpeedtest = (force = false) => {
     working.value = false
     return
   }
-  
+
+  // 验证 session 是否有效
+  if (!currentSessionId.value) {
+    errorMessage.value = 'Session not ready, please wait...'
+    setTimeout(() => { errorMessage.value = '' }, 3000)
+    return
+  }
+
+  errorMessage.value = ''
   working.value = true
   uploadText.value = '0'
   downloadText.value = '0'
-  
+
   // Reset chart data
   charts.value.download.data = []
   charts.value.download.categories = []
   charts.value.upload.data = []
   charts.value.upload.categories = []
-  
-  workerInstance = new Worker(`${baseUrl.value}/speedtest_worker.js`)
+
+  // 构造 Worker URL - 使用绝对路径
+  const workerUrl = baseUrl.value
+    ? `${baseUrl.value}/speedtest_worker.js`
+    : `${window.location.origin}/speedtest_worker.js`
+
+  try {
+    workerInstance = new Worker(workerUrl)
+  } catch (err) {
+    console.error('Failed to create speedtest worker:', err)
+    errorMessage.value = 'Failed to load speedtest worker'
+    working.value = false
+    setTimeout(() => { errorMessage.value = '' }, 3000)
+    return
+  }
+
+  workerInstance.onerror = (err) => {
+    console.error('Worker error:', err)
+    errorMessage.value = 'Speedtest worker error'
+    working.value = false
+    if (workerTimer) clearInterval(workerTimer)
+    workerInstance = null
+    setTimeout(() => { errorMessage.value = '' }, 3000)
+  }
+
   workerInstance.onmessage = (e) => {
     const nowPointName = new Date().toLocaleTimeString()
     const data = JSON.parse(e.data)
     const status = data.testState
-    
+
     if (status >= 4) {
       return startOrStopSpeedtest(false)
     }
@@ -223,7 +257,7 @@ const startOrStopSpeedtest = (force = false) => {
       uploadText.value = data.ulStatus
       charts.value.upload.data.push(parseFloat(data.ulStatus))
       charts.value.upload.categories.push(nowPointName)
-      
+
       if (chartUploadRef.value) {
         chartUploadRef.value.updateOptions({
           xaxis: {
@@ -242,7 +276,7 @@ const startOrStopSpeedtest = (force = false) => {
       downloadText.value = data.dlStatus
       charts.value.download.data.push(parseFloat(data.dlStatus))
       charts.value.download.categories.push(nowPointName)
-      
+
       if (chartDownloadRef.value) {
         chartDownloadRef.value.updateOptions({
           xaxis: {
@@ -256,18 +290,23 @@ const startOrStopSpeedtest = (force = false) => {
       }
     }
   }
-  
-  const sessionUrl = baseUrl.value ? `${baseUrl.value}/session/${currentSessionId.value}` : `./session/${currentSessionId.value}`
-  
+
+  // 构造 session URL - 使用绝对路径
+  const sessionUrl = baseUrl.value
+    ? `${baseUrl.value}/session/${currentSessionId.value}`
+    : `${window.location.origin}/session/${currentSessionId.value}`
+
   workerInstance.postMessage(
     'start ' + JSON.stringify({
       test_order: 'D_U',
       url_dl: `${sessionUrl}/speedtest/download`,
       url_ul: `${sessionUrl}/speedtest/upload`,
-      url_ping: `${sessionUrl}/speedtest/upload`
+      url_ping: `${sessionUrl}/speedtest/upload`,
+      url_getIp: '',  // 禁用 IP 查询，后端没有这个接口
+      getIp_ispInfo: false
     })
   )
-  
+
   workerTimer = setInterval(() => {
     workerInstance.postMessage('status')
   }, 200)
@@ -322,13 +361,19 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- Error Message -->
+    <div v-if="errorMessage" class="text-center">
+      <p class="text-red-500 dark:text-red-400 text-sm">{{ errorMessage }}</p>
+    </div>
+
     <!-- Control Button -->
     <div class="text-center pt-4">
       <button
         @click="startOrStopSpeedtest"
-        class="inline-flex items-center px-8 py-4 rounded-full font-semibold text-lg transition-all duration-300 transform hover:scale-105"
-        :class="working 
-          ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg hover:shadow-red-500/30' 
+        :disabled="!currentSessionId && !working"
+        class="inline-flex items-center px-8 py-4 rounded-full font-semibold text-lg transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+        :class="working
+          ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg hover:shadow-red-500/30'
           : 'bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white shadow-lg hover:shadow-primary-500/30'"
       >
         <component :is="working ? StopIcon : PlayIcon" class="w-6 h-6 mr-3" />
