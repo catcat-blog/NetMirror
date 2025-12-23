@@ -213,23 +213,6 @@ func init() {
 	os.MkdirAll(dataDir, 0755)
 	
 	storage = NewFileStorage(dataDir + "/nodes.json")
-	
-	// Auto-migrate from environment variables if API key is set but no API nodes exist
-	if os.Getenv("ADMIN_API_KEY") != "" && !hasApiNodes() {
-		envNodes := getEnvironmentNodes()
-		if len(envNodes) > 0 {
-			fmt.Printf("Auto-migrating %d nodes from environment variables to API management...\n", len(envNodes))
-			migratedCount := 0
-			for _, envNode := range envNodes {
-				if err := storage.AddNode(envNode); err == nil {
-					migratedCount++
-				}
-			}
-			if migratedCount > 0 {
-				fmt.Printf("Successfully migrated %d nodes to API management\n", migratedCount)
-			}
-		}
-	}
 }
 
 // RequireApiKey is the exported auth middleware for admin operations
@@ -261,20 +244,17 @@ func RequireApiKey(c *gin.Context) {
 	c.Next()
 }
 
-// GetNodes returns the list of LG nodes with backward compatibility
+// GetNodes returns the list of LG nodes
 func GetNodes(c *gin.Context) {
-	var nodes []Node
-	
-	// If ADMIN_API_KEY is set, use API-managed nodes
-	if os.Getenv("ADMIN_API_KEY") != "" {
-		if apiNodes, err := storage.GetNodes(); err == nil && len(apiNodes) > 0 {
-			nodes = apiNodes
-		}
-	} else {
-		// If no ADMIN_API_KEY, use environment variables (legacy mode)
-		nodes = getEnvironmentNodes()
+	nodes, err := storage.GetNodes()
+	if err != nil {
+		c.JSON(500, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
 	}
-	
+
 	// Mark current node
 	currentNodeURL := os.Getenv("LG_CURRENT_URL")
 	for i, node := range nodes {
@@ -284,71 +264,24 @@ func GetNodes(c *gin.Context) {
 		// Remove API key from response
 		nodes[i].ApiKey = ""
 	}
-	
+
 	c.JSON(200, gin.H{
 		"success": true,
 		"nodes":   nodes,
 	})
 }
 
-// Helper function to get nodes from environment variables
-func getEnvironmentNodes() []Node {
-	var nodes []Node
-	nodesEnv := os.Getenv("LG_NODES")
-	if nodesEnv != "" {
-		nodeStrings := strings.Split(nodesEnv, ";")
-		
-		for _, nodeStr := range nodeStrings {
-			parts := strings.Split(nodeStr, "|")
-			if len(parts) >= 3 {
-				node := Node{
-					Name:     parts[0],
-					Location: parts[1],
-					URL:      parts[2],
-				}
-				nodes = append(nodes, node)
-			}
-		}
-	}
-	return nodes
-}
-
-// Helper function to check if API nodes exist
-func hasApiNodes() bool {
-	apiNodes, err := storage.GetNodes()
-	return err == nil && len(apiNodes) > 0
-}
-
 // Admin API endpoints for node management
 
-// CreateNode creates a new node (admin only)
+// CreateNode creates a new node (admin only, used by token registration)
 func CreateNode(c *gin.Context) {
 	var req NodeRequest
-	
-	// Support both JSON body and query parameters
-	if c.Request.Method == "GET" {
-		// GET request with query parameters
-		req.Name = c.Query("name")
-		req.Location = c.Query("location")
-		req.URL = c.Query("url")
-		
-		// Validate required parameters
-		if req.Name == "" || req.Location == "" || req.URL == "" {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "Missing required parameters: name, location, url",
-			})
-			return
-		}
-	} else {
-		// POST request with JSON body
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   err.Error(),
-			})
-			return
-		}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
 	}
 
 	node := Node{

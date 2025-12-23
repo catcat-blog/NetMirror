@@ -110,7 +110,6 @@ func SetupHttpRoute(e *gin.Engine) {
 	{
 		// Node management
 		admin.POST("/nodes", nodes.CreateNode)
-		admin.GET("/nodes/add", nodes.CreateNode)     // GET endpoint for easy automation
 		admin.GET("/nodes/:id", nodes.GetNodeDetail)
 		admin.PUT("/nodes/:id", nodes.UpdateNode)
 		admin.DELETE("/nodes/:id", nodes.DeleteNode)
