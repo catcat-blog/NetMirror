@@ -2,7 +2,7 @@
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
 
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
+/* Using system fonts for fast loading - no external fonts */
 
 * {
   box-sizing: border-box;
@@ -10,53 +10,45 @@
 
 html {
   scroll-behavior: smooth;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  /* Fix overscroll bounce background color */
-  background-color: #f0f7ff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background-color: #f9fafb;
 }
 
 html.dark {
-  background-color: #0f172a;
+  background-color: #111827;
 }
 
 body {
   margin: 0;
   padding: 0;
-  line-height: 1.6;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Fix overscroll bounce background color */
-  background-color: #f0f7ff;
+  background-color: #f9fafb;
   overscroll-behavior: none;
 }
 
 body.dark {
-  background-color: #0f172a;
+  background-color: #111827;
 }
 
 #app {
   min-height: 100vh;
   min-height: 100dvh;
-  /* Fix overscroll bounce background color */
-  background: linear-gradient(to bottom right, #f0f7ff, #ffffff, #f0f7ff);
 }
 
-#app.dark {
-  background: linear-gradient(to bottom right, #0f172a, #1e293b, #0f172a);
-}
-
-/* Custom scrollbar */
+/* Custom scrollbar - minimal style */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-gray-100/50 dark:bg-gray-800/50;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-gray-300 dark:bg-gray-600 rounded-full border-2 border-transparent bg-clip-content;
+  @apply bg-gray-300 dark:bg-gray-600 rounded;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -78,7 +70,7 @@ body.dark {
 
 /* ApexCharts dark mode fixes */
 .apexcharts-tooltip {
-  @apply !bg-gray-800/80 !backdrop-blur-sm !border-gray-600;
+  @apply !bg-gray-800/90 !border-gray-600;
 }
 
 .apexcharts-tooltip-title,
@@ -86,10 +78,10 @@ body.dark {
   @apply !text-white;
 }
 
-/* Transitions */
+/* Simple transitions */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.15s ease;
 }
 
 .fade-enter-from,
@@ -97,40 +89,19 @@ body.dark {
   opacity: 0;
 }
 
-.slide-up-enter-active,
-.slide-up-leave-active {
-  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+.slide-enter-active,
+.slide-leave-active {
+  transition: transform 0.2s ease, opacity 0.2s ease;
 }
 
-.slide-up-enter-from {
+.slide-enter-from {
   opacity: 0;
-  transform: translateY(30px);
+  transform: translateY(8px);
 }
 
-.slide-up-leave-to {
+.slide-leave-to {
   opacity: 0;
-  transform: translateY(-30px);
-}
-
-/* Loading animations */
-@keyframes shimmer {
-  0% {
-    background-position: -200px 0;
-  }
-  100% {
-    background-position: calc(200px + 100%) 0;
-  }
-}
-
-.shimmer {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 200px 100%;
-  animation: shimmer 1.5s infinite;
-}
-
-.dark .shimmer {
-  background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
-  background-size: 200px 100%;
+  transform: translateY(-8px);
 }
 
 /* Focus styles */
@@ -140,27 +111,22 @@ body.dark {
 
 /* Button styles */
 .btn-primary {
-  @apply bg-primary-500 hover:bg-primary-600 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 focus-ring shadow-md hover:shadow-lg hover:-translate-y-0.5;
+  @apply bg-primary-500 hover:bg-primary-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-150 focus-ring;
 }
 
 .btn-secondary {
-  @apply bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 focus-ring shadow-md hover:shadow-lg hover:-translate-y-0.5;
+  @apply bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium py-2 px-4 rounded-lg transition-colors duration-150 focus-ring;
 }
 
 /* Card styles */
 .card-base {
-  @apply bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl rounded-2xl shadow-lg border border-white/20 dark:border-gray-700/50 overflow-hidden transition-all duration-300;
+  @apply bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden;
 }
 
 .card-header {
-  @apply px-6 py-4;
+  @apply px-5 py-4 border-b border-gray-100 dark:border-gray-700;
 }
 
 .card-body {
-  @apply p-6;
-}
-
-/* Utility classes */
-.text-gradient {
-  @apply bg-gradient-to-r from-primary-600 to-purple-600 bg-clip-text text-transparent;
+  @apply p-5;
 }
