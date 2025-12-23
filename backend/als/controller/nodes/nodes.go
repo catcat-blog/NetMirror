@@ -196,6 +196,11 @@ func (fs *FileStorage) saveNodes(nodes []Node) error {
 
 var storage NodeStorage
 
+// GetStorage returns the global storage instance
+func GetStorage() NodeStorage {
+	return storage
+}
+
 // Initialize storage
 func init() {
 	// Use file storage for now, can be extended to database later

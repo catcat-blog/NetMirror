@@ -40,17 +40,21 @@ Usage:
     $0 [OPTIONS]
 
 Options:
-    --name NAME           Node name (required)
-    --location LOCATION   Node location (required) 
+    --name NAME           Node name (required, unless using --token)
+    --location LOCATION   Node location (required, unless using --token)
     --port PORT           HTTP port (default: 3000)
     --dir DIRECTORY       Deployment directory (default: ./netmirror-node)
     --master URL          Master node URL (optional, if not provided, deploys as master node)
     --admin-key KEY       Admin API key for auto-registration (optional, auto-generated for master nodes)
+    --token TOKEN         One-time deploy token (generated from Admin panel - simplest method)
     --node-url URL        Custom node URL for registration (optional, defaults to http://localhost:PORT)
     --non-interactive     Skip all prompts (use with required params)
     -h, --help            Show this help
 
 Examples:
+    # One-click deployment with token (recommended for child nodes)
+    $0 --token "eyJhbGci..." --port 3001 --non-interactive
+
     # Interactive mode (child node)
     $0
 
@@ -60,7 +64,7 @@ Examples:
     # Deploy master node with custom domain
     $0 --name "Master Node" --location "Tokyo, JP" --port 3000 --node-url "https://lg-master.example.com" --non-interactive
 
-    # Deploy child node with master registration
+    # Deploy child node with master registration (legacy method)
     $0 --name "Tokyo Node" --location "Tokyo, JP" --master "http://master:3000" --admin-key "your-key" --non-interactive
 
     # Deploy child node with custom domain
@@ -102,6 +106,10 @@ parse_args() {
                 ADMIN_KEY="$2"
                 shift 2
                 ;;
+            --token)
+                DEPLOY_TOKEN="$2"
+                shift 2
+                ;;
             --node-url)
                 CUSTOM_URL="$2"
                 shift 2
@@ -125,9 +133,17 @@ parse_args() {
     # Set defaults
     PORT=${PORT:-3000}
     DEPLOY_DIR=${DEPLOY_DIR:-./netmirror-node}
-    
-    # Validate required parameters in non-interactive mode
-    if [[ "$INTERACTIVE" == "false" ]]; then
+
+    # Token-based deployment mode
+    TOKEN_MODE=false
+    if [[ -n "$DEPLOY_TOKEN" ]]; then
+        TOKEN_MODE=true
+        # Token mode doesn't require name/location - they come from the token
+        log "Token-based deployment mode detected"
+    fi
+
+    # Validate required parameters in non-interactive mode (unless using token)
+    if [[ "$INTERACTIVE" == "false" && "$TOKEN_MODE" == "false" ]]; then
         if [[ -z "$NODE_NAME" ]]; then
             error "Missing required parameter: --name"
             exit 1
@@ -215,6 +231,98 @@ verify_admin_key() {
     
     # Clean up temp files
     rm -f /tmp/verify_response /tmp/curl_error
+}
+
+# Verify and fetch token metadata from master node
+verify_deploy_token() {
+    local token="$1"
+    local master_url="$2"
+
+    if [[ -z "$token" || -z "$master_url" ]]; then
+        return 1
+    fi
+
+    log "Verifying deploy token with master node..."
+
+    # The token verification happens during registration
+    # For now, just verify the master node is reachable
+    if ! verify_master_node "$master_url"; then
+        return 1
+    fi
+
+    success "Master node verified, token will be validated during registration"
+    return 0
+}
+
+# Register node using one-time deploy token
+register_with_token() {
+    local token="$1"
+    local master_url="$2"
+    local node_url="$3"
+
+    if [[ -z "$token" || -z "$master_url" || -z "$node_url" ]]; then
+        error "Missing required parameters for token registration"
+        return 1
+    fi
+
+    log "Registering node with master using deploy token..."
+    log "Master URL: $master_url"
+    log "Node URL: $node_url"
+
+    # Send registration request to master node
+    local response_file="/tmp/token_register_response"
+    local error_file="/tmp/token_register_error"
+
+    local http_code=$(curl -s -w "%{http_code}" -o "$response_file" \
+        -X POST \
+        -H "Content-Type: application/json" \
+        -d "{\"token\": \"$token\", \"url\": \"$node_url\"}" \
+        "$master_url/api/register" \
+        2>"$error_file" || echo "000")
+
+    if [[ "$http_code" == "000" ]]; then
+        error "Failed to connect to master node"
+        if [[ -f "$error_file" ]]; then
+            cat "$error_file"
+        fi
+        rm -f "$response_file" "$error_file"
+        return 1
+    fi
+
+    if [[ "$http_code" == "201" || "$http_code" == "200" ]]; then
+        # Parse response to get node info
+        if [[ -f "$response_file" ]]; then
+            local response_data=$(cat "$response_file")
+            # Try to extract node info from response using simple parsing
+            TOKEN_NODE_NAME=$(echo "$response_data" | grep -o '"name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+            TOKEN_NODE_LOCATION=$(echo "$response_data" | grep -o '"location"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"location"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+        fi
+        success "Node registered successfully with master!"
+        rm -f "$response_file" "$error_file"
+        return 0
+    elif [[ "$http_code" == "400" ]]; then
+        error "Invalid or expired token"
+        if [[ -f "$response_file" ]]; then
+            log "Response: $(cat "$response_file")"
+        fi
+        rm -f "$response_file" "$error_file"
+        return 1
+    elif [[ "$http_code" == "404" ]]; then
+        error "Token not found - it may have already been used"
+        rm -f "$response_file" "$error_file"
+        return 1
+    elif [[ "$http_code" == "409" ]]; then
+        warn "Token already used"
+        rm -f "$response_file" "$error_file"
+        return 1
+    else
+        error "Registration failed (HTTP $http_code)"
+        if [[ -f "$response_file" ]]; then
+            log "Response: $(cat "$response_file")"
+        fi
+        rm -f "$response_file" "$error_file"
+        return 1
+    fi
 }
 
 # Interactive retry for master node URL
@@ -332,12 +440,48 @@ check_docker() {
 # Step 2: Generate environment file
 setup_env() {
     log "Step 2: Setting up environment..."
-    
+
     # Create deployment directory
     mkdir -p "$DEPLOY_DIR"
     cd "$DEPLOY_DIR"
     log "Using deployment directory: $(pwd)"
-    
+
+    # Check for environment variables from install script template
+    if [[ -n "${TOKEN_MASTER_URL:-}" && -z "$MASTER_URL" ]]; then
+        MASTER_URL="$TOKEN_MASTER_URL"
+        log "Using master URL from environment: $MASTER_URL"
+    fi
+
+    # Token-based deployment mode
+    if [[ "$TOKEN_MODE" == "true" ]]; then
+        log "Token-based deployment mode"
+
+        # Require master URL for token registration
+        if [[ -z "$MASTER_URL" ]]; then
+            if [[ "$INTERACTIVE" == "true" ]]; then
+                read -p "Master node URL (required for token registration): " MASTER_URL
+            else
+                error "Master URL is required for token-based deployment. Use --master or set TOKEN_MASTER_URL"
+                exit 1
+            fi
+        fi
+
+        # Verify master node connectivity
+        if ! verify_master_node "$MASTER_URL"; then
+            error "Cannot connect to master node"
+            exit 1
+        fi
+
+        # For token mode, node info comes from registration response
+        # Set placeholder names until we get the real ones from registration
+        NODE_NAME="${NODE_NAME:-Token Node}"
+        NODE_LOCATION="${NODE_LOCATION:-Auto-configured}"
+        DEPLOYMENT_MODE="token"
+
+        log "Token deployment configured, node info will be set during registration"
+        return  # Skip the rest of normal setup, will continue after container starts
+    fi
+
     # Get node info (interactive mode only)
     if [[ "$INTERACTIVE" == "true" ]]; then
         if [[ -z "$NODE_NAME" ]]; then
@@ -351,13 +495,13 @@ setup_env() {
             PORT=${PORT:-3000}
         fi
     fi
-    
+
     # Determine deployment mode: master or child node
     DEPLOYMENT_MODE="child"
     if [[ -z "$MASTER_URL" ]]; then
         DEPLOYMENT_MODE="master"
         log "Detected master node deployment (no --master URL provided)"
-        
+
         # For master nodes, ensure we have an admin API key
         if [[ -z "$ADMIN_KEY" ]]; then
             if [[ "$INTERACTIVE" == "true" ]]; then
@@ -378,7 +522,7 @@ setup_env() {
         log "Detected child node deployment (master URL: $MASTER_URL)"
         # Get and verify master node URL
         get_master_url
-        
+
         # Get and verify admin key
         get_admin_key
     fi
@@ -459,6 +603,83 @@ EOF
         echo "ADMIN_API_KEY=$ADMIN_KEY" >> .env
     fi
     
+    rm .env.clean
+    success "Environment file created: .env"
+}
+
+# Setup environment for token-based deployment
+setup_env_token() {
+    log "Setting up environment for token-based deployment..."
+
+    # Create deployment directory
+    mkdir -p "$DEPLOY_DIR"
+    cd "$DEPLOY_DIR"
+    log "Using deployment directory: $(pwd)"
+
+    # Get local IP
+    LOCAL_IP=$(hostname -I | awk '{print $1}' 2>/dev/null || echo "localhost")
+
+    # Download env template or use built-in
+    log "Downloading environment template from repository..."
+    if curl -s "$REPO_URL" -o .env.tmp; then
+        grep -v '^#' .env.tmp | grep -v '^$' | grep '=' > .env.clean || true
+        rm .env.tmp
+    else
+        warn "Failed to download template, using built-in template"
+        cat > .env.clean << 'EOF'
+LISTEN_IP=0.0.0.0
+HTTP_PORT=3000
+LOCATION=BGP
+PUBLIC_IPV4=
+PUBLIC_IPV6=
+LOGO=<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="m16.24 7.76-1.41 1.41M15.76 16.24l1.41 1.41M7.76 16.24l1.41-1.41M7.76 7.76l1.41 1.41M12 3v6M12 15v6M3 12h6M15 12h6"/></svg>
+LOGO_TYPE=auto
+DISPLAY_TRAFFIC=true
+ENABLE_SPEEDTEST=true
+UTILITIES_PING=true
+UTILITIES_MTR=true
+UTILITIES_TRACEROUTE=true
+UTILITIES_SPEEDTESTDOTNET=true
+UTILITIES_FAKESHELL=true
+UTILITIES_IPERF3=true
+SPEEDTEST_FILE_LIST=100MB 1GB 10GB
+UTILITIES_IPERF3_PORT_MIN=30000
+UTILITIES_IPERF3_PORT_MAX=31000
+DATA_DIR=/data
+LG_NODES=
+LG_CURRENT_URL=
+LG_CURRENT_NAME=
+LG_CURRENT_LOCATION=
+ADMIN_API_KEY=
+EOF
+    fi
+
+    # Create .env file with placeholder values (will be updated after registration)
+    cat > .env << EOF
+# NetMirror Node Configuration (Token Deployment)
+# Generated: $(date)
+EOF
+
+    # Process template and set values
+    while IFS='=' read -r key value; do
+        case "$key" in
+            "HTTP_PORT") echo "HTTP_PORT=$PORT" >> .env ;;
+            "LG_CURRENT_NAME") echo "LG_CURRENT_NAME=$NODE_NAME" >> .env ;;
+            "LG_CURRENT_LOCATION") echo "LG_CURRENT_LOCATION=$NODE_LOCATION" >> .env ;;
+            "LG_CURRENT_URL") echo "LG_CURRENT_URL=http://$LOCAL_IP:$PORT" >> .env ;;
+            "DATA_DIR") echo "DATA_DIR=/data" >> .env ;;
+            "LOCATION") echo "LOCATION=$NODE_LOCATION" >> .env ;;
+            "LG_NODES") echo "LG_NODES=" >> .env ;;
+            *) echo "$key=$value" >> .env ;;
+        esac
+    done < .env.clean
+
+    # Add master node config
+    echo >> .env
+    echo "# Master Node Integration (Token Deployment)" >> .env
+    echo "MASTER_NODE_URL=$MASTER_URL" >> .env
+    echo "NODE_AUTO_REGISTER=true" >> .env
+
     rm .env.clean
     success "Environment file created: .env"
 }
@@ -556,6 +777,56 @@ EOF
 
 # Step 4: Report to master node (for child nodes) or self-register master node
 report_to_master() {
+    # Token-based registration
+    if [[ "$DEPLOYMENT_MODE" == "token" ]]; then
+        log "Step 4: Registering with master node using deploy token..."
+
+        # Determine node URL for registration
+        if [[ -n "$CUSTOM_URL" ]]; then
+            NODE_URL="$CUSTOM_URL"
+        else
+            # Get external IP
+            EXTERNAL_IP=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 ipinfo.io/ip 2>/dev/null || echo "localhost")
+            NODE_URL="http://$EXTERNAL_IP:$PORT"
+        fi
+
+        # Register with token
+        if register_with_token "$DEPLOY_TOKEN" "$MASTER_URL" "$NODE_URL"; then
+            # Update node info from registration response
+            if [[ -n "$TOKEN_NODE_NAME" ]]; then
+                NODE_NAME="$TOKEN_NODE_NAME"
+            fi
+            if [[ -n "$TOKEN_NODE_LOCATION" ]]; then
+                NODE_LOCATION="$TOKEN_NODE_LOCATION"
+            fi
+
+            # Update .env file with actual node info
+            if [[ -n "$TOKEN_NODE_NAME" || -n "$TOKEN_NODE_LOCATION" ]]; then
+                log "Updating .env with node info from registration..."
+                sed -i "s/^LG_CURRENT_NAME=.*/LG_CURRENT_NAME=$NODE_NAME/" .env
+                sed -i "s/^LG_CURRENT_LOCATION=.*/LG_CURRENT_LOCATION=$NODE_LOCATION/" .env
+                sed -i "s/^LOCATION=.*/LOCATION=$NODE_LOCATION/" .env
+            fi
+
+            success "=== Token Deployment Complete! ==="
+            echo
+            echo -e "${GREEN}Node Information:${NC}"
+            echo "  Name: $NODE_NAME"
+            echo "  Location: $NODE_LOCATION"
+            echo "  URL: $NODE_URL"
+            echo "  Master Node: $MASTER_URL"
+            echo "  Deployment Path: $(pwd)"
+            echo
+        else
+            error "Token registration failed!"
+            echo
+            echo "The deploy token may have expired or already been used."
+            echo "Please generate a new token from the Admin panel."
+            exit 1
+        fi
+        return
+    fi
+
     if [[ "$DEPLOYMENT_MODE" == "master" ]]; then
         log "Step 4: Self-registering master node..."
         
@@ -680,16 +951,27 @@ main() {
     
     if [[ "$INTERACTIVE" == "false" ]]; then
         log "Running in non-interactive mode"
-        log "Node: $NODE_NAME ($NODE_LOCATION) on port $PORT"
+        if [[ "$TOKEN_MODE" == "true" ]]; then
+            log "Token-based deployment on port $PORT"
+        else
+            log "Node: $NODE_NAME ($NODE_LOCATION) on port $PORT"
+        fi
         log "Deploy to: $DEPLOY_DIR"
         if [[ -n "$MASTER_URL" ]]; then
             log "Master node: $MASTER_URL"
         fi
         echo
     fi
-    
+
     check_docker
-    setup_env
+
+    # Use appropriate setup function based on deployment mode
+    if [[ "$TOKEN_MODE" == "true" ]]; then
+        setup_env_token
+    else
+        setup_env
+    fi
+
     run_container
     report_to_master
     
@@ -734,6 +1016,20 @@ main() {
         echo "  • Use --node-url if you have a custom domain, reverse proxy, or CDN"
         echo "  • The node-url should be the public-facing URL that users will access"
         echo "  • Example: --node-url \"https://lg-singapore.example.com\""
+        echo
+        echo -e "${GREEN}🔑 One-Click Deployment (Recommended):${NC}"
+        echo "  1. Open Admin Panel: $MASTER_NODE_URL (click settings icon)"
+        echo "  2. Click 'Deploy Tokens' and create a new token"
+        echo "  3. Copy the install command and run on child server"
+        echo "  4. The node auto-registers with pre-configured name and location"
+        echo
+    elif [[ "$DEPLOYMENT_MODE" == "token" ]]; then
+        # Token deployment info already printed in report_to_master
+        echo -e "${GREEN}Token-based Deployment Summary:${NC}"
+        echo "  Name: $NODE_NAME"
+        echo "  Location: $NODE_LOCATION"
+        echo "  Master Node: $MASTER_URL"
+        echo "  Deployment Path: $(pwd)"
         echo
     else
         echo -e "${GREEN}Child Node Information:${NC}"

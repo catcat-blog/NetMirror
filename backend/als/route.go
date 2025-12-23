@@ -17,6 +17,7 @@ import (
 	"github.com/X-Zero-L/als/als/controller/session"
 	"github.com/X-Zero-L/als/als/controller/shell"
 	"github.com/X-Zero-L/als/als/controller/speedtest"
+	"github.com/X-Zero-L/als/als/controller/tokens"
 	"github.com/X-Zero-L/als/config"
 	iEmbed "github.com/X-Zero-L/als/embed"
 )
@@ -26,7 +27,7 @@ func SetupHttpRoute(e *gin.Engine) {
 	e.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, session")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, session, X-Api-Key")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
 
 		if c.Request.Method == "OPTIONS" {
@@ -107,12 +108,22 @@ func SetupHttpRoute(e *gin.Engine) {
 	admin := e.Group("/api/admin")
 	admin.Use(nodes.RequireApiKey)
 	{
+		// Node management
 		admin.POST("/nodes", nodes.CreateNode)
 		admin.GET("/nodes/add", nodes.CreateNode)     // GET endpoint for easy automation
 		admin.GET("/nodes/:id", nodes.GetNodeDetail)
 		admin.PUT("/nodes/:id", nodes.UpdateNode)
 		admin.DELETE("/nodes/:id", nodes.DeleteNode)
+
+		// Token management (for one-click deployment)
+		admin.POST("/tokens", tokens.CreateToken)
+		admin.GET("/tokens", tokens.ListTokens)
+		admin.DELETE("/tokens/:id", tokens.DeleteToken)
+		admin.GET("/install-script/:token", tokens.GetInstallScript)
 	}
+
+	// Public node registration endpoint (token-based, no admin key required)
+	e.POST("/api/register", tokens.RegisterNode)
 	
 	v1 := e.Group("/method", controller.MiddlewareSessionOnHeader())
 	{
@@ -163,35 +174,49 @@ func SetupHttpRoute(e *gin.Engine) {
 		}
 	}
 
-	e.Any("/assets/:filename", func(c *gin.Context) {
-		filePath := c.Request.RequestURI
-		filePath = filePath[1:]
-		handleStatisFile(filePath, c)
-	})
+	// Static file routes - skip in Agent mode
+	if !config.Config.AgentMode {
+		e.Any("/assets/:filename", func(c *gin.Context) {
+			filePath := c.Request.RequestURI
+			filePath = filePath[1:]
+			handleStatisFile(filePath, c)
+		})
 
-	e.GET("/css/:filename", func(c *gin.Context) {
-		filePath := c.Request.RequestURI
-		filePath = filePath[1:]
-		handleStatisFile(filePath, c)
-	})
+		e.GET("/css/:filename", func(c *gin.Context) {
+			filePath := c.Request.RequestURI
+			filePath = filePath[1:]
+			handleStatisFile(filePath, c)
+		})
 
-	e.GET("/js/:filename", func(c *gin.Context) {
-		filePath := c.Request.RequestURI
-		filePath = filePath[1:]
-		handleStatisFile(filePath, c)
-	})
+		e.GET("/js/:filename", func(c *gin.Context) {
+			filePath := c.Request.RequestURI
+			filePath = filePath[1:]
+			handleStatisFile(filePath, c)
+		})
 
-	e.GET("/", func(c *gin.Context) {
-		handleIndexHTML(c)
-	})
+		e.GET("/", func(c *gin.Context) {
+			handleIndexHTML(c)
+		})
 
-	e.GET("/speedtest_worker.js", func(c *gin.Context) {
-		handleStatisFile("speedtest_worker.js", c)
-	})
+		e.GET("/speedtest_worker.js", func(c *gin.Context) {
+			handleStatisFile("speedtest_worker.js", c)
+		})
 
-	e.GET("/favicon.ico", func(c *gin.Context) {
-		handleFavicon(c)
-	})
+		e.GET("/favicon.ico", func(c *gin.Context) {
+			handleFavicon(c)
+		})
+	} else {
+		// Agent mode: return JSON info on root path
+		e.GET("/", func(c *gin.Context) {
+			c.JSON(200, gin.H{
+				"mode":     "agent",
+				"name":     config.Config.Location,
+				"version":  "2.2.0",
+				"api":      true,
+				"ui":       false,
+			})
+		})
+	}
 }
 
 func handleStatisFile(filePath string, c *gin.Context) {

@@ -20,6 +20,9 @@ type ALSConfig struct {
 	ListenHost string `json:"-"`
 	ListenPort string `json:"-"`
 
+	// Agent mode - skip UI serving, API only
+	AgentMode bool `json:"agent_mode"`
+
 	Location string `json:"location"`
 	Logo     string `json:"logo"`
 	LogoType string `json:"logo_type"`

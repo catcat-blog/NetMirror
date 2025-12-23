@@ -26,6 +26,7 @@ func LoadFromEnv() {
 	}
 
 	envVarsBool := map[string]*bool{
+		"AGENT_MODE":                &Config.AgentMode,
 		"DISPLAY_TRAFFIC":           &Config.FeatureIfaceTraffic,
 		"ENABLE_SPEEDTEST":          &Config.FeatureLibrespeed,
 		"UTILITIES_SPEEDTESTDOTNET": &Config.FeatureSpeedtestDotNet,

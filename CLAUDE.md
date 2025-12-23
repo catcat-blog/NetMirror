@@ -126,6 +126,12 @@ make clean-all            # Clean everything including node_modules
    - Session-based isolation prevents cross-client interference
    - CORS middleware configured for web-based access
 
+## Docker Images
+
+Pre-built multi-architecture images available on DockerHub:
+- **Image**: `soyorins/netmirror:latest`
+- **Architectures**: `linux/amd64`, `linux/arm64`
+
 ## Deployment Scripts
 
 NetMirror includes automated deployment scripts in the `scripts/` directory:
@@ -149,11 +155,38 @@ Key configuration via `.env` file:
 - `LISTEN_IP`: IP address for server binding (default: all interfaces)
 - `LOCATION`: Server location string (auto-detected via ipapi.co if not set)
 - `PUBLIC_IPV4`/`PUBLIC_IPV6`: Public IP addresses (auto-detected if not set)
+- `APP_TITLE`: Browser title (default: "NetMirror")
+- `LOGO`: Supports URL, Base64, emoji, SVG, or text
 - `UTILITIES_*`: Feature flags for enabling/disabling tools (PING, SPEEDTESTDOTNET, FAKESHELL, IPERF3, etc.)
 - `SPEEDTEST_FILE_LIST`: Available test file sizes (default: "1MB 10MB 100MB 1GB")
 - `IPERF3_PORT_MIN`/`IPERF3_PORT_MAX`: iPerf3 server port range (default: 30000-31000)
 - `DISPLAY_TRAFFIC`: Toggle real-time traffic display (default: true)
 - `SPONSOR_MESSAGE`: Custom sponsor message (text, URL, or file path)
+- `ADMIN_API_KEY`: Secret key for admin API access (enables node management panel)
+- `DATA_DIR`: Directory for node configuration storage (default: `./data`)
+
+### Node Configuration (Legacy)
+- `LG_NODES`: Semicolon-separated list in format `NAME|LOCATION|URL` (e.g., `London|London, UK|https://lg1.example.com`)
+- `LG_CURRENT_URL`/`LG_CURRENT_NAME`/`LG_CURRENT_LOCATION`: Current node metadata
+
+## API Endpoints
+
+### Network Tools (require session header)
+- `GET /method/ping?host=...&count=...` - Ping (IPv4)
+- `GET /method/ping6?host=...` - Ping (IPv6)
+- `GET /method/mtr?host=...` - MTR
+- `GET /method/mtr6?host=...` - MTR (IPv6)
+- `GET /method/traceroute?host=...` - Traceroute
+- `GET /method/traceroute6?host=...` - Traceroute (IPv6)
+- `GET /method/iperf3/server` - iPerf3 server info
+- `GET /method/speedtest_dot_net?options=...` - Speedtest.net
+
+### Node Management (require `X-Api-Key` header or `api_key` query param)
+- `GET /nodes` - List all nodes (public)
+- `POST /api/admin/nodes` - Create node
+- `GET /api/admin/nodes/add?name=...&location=...&url=...` - Create node via GET (for automation)
+- `PUT /api/admin/nodes/:id` - Update node
+- `DELETE /api/admin/nodes/:id` - Delete node
 
 ## UI Technology Stack
 

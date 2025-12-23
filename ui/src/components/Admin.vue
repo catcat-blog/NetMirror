@@ -198,19 +198,127 @@
                 </svg>
                 Test Connectivity
               </button>
+              <button
+                @click="toggleTokensSection"
+                class="group inline-flex items-center px-4 py-2 border border-purple-300/50 dark:border-purple-600/50 rounded-xl shadow-lg text-sm font-medium text-purple-700 dark:text-purple-200 bg-purple-50/80 dark:bg-purple-900/20 backdrop-blur-sm hover:bg-purple-100 dark:hover:bg-purple-900/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200 hover:scale-105"
+              >
+                <KeyIcon class="w-4 h-4 mr-2" />
+                {{ showTokensSection ? 'Hide Tokens' : 'Deploy Tokens' }}
+              </button>
               <div class="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
                 <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 <span>{{ nodes.length }} node{{ nodes.length !== 1 ? 's' : '' }} total</span>
               </div>
             </div>
-            <button
-              @click="showCreateModal = true"
-              class="group inline-flex items-center px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-xl hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all duration-200 transform hover:scale-105 shadow-lg shadow-primary-500/25"
-            >
-              <PlusIcon class="w-5 h-5 mr-2 transition-transform duration-200 group-hover:rotate-90" />
-              Add Node
-            </button>
           </div>
+
+          <!-- Deploy Tokens Section -->
+          <transition
+            enter-active-class="transition-all duration-300 ease-out"
+            enter-from-class="opacity-0 -translate-y-4"
+            enter-to-class="opacity-100 translate-y-0"
+            leave-active-class="transition-all duration-200 ease-in"
+            leave-from-class="opacity-100 translate-y-0"
+            leave-to-class="opacity-0 -translate-y-4"
+          >
+            <div v-if="showTokensSection" class="mb-8 animate-slide-up" style="animation-delay: 0.45s;">
+              <div class="bg-white/90 dark:bg-gray-800/90 backdrop-blur-lg rounded-2xl shadow-lg border border-purple-200/30 dark:border-purple-700/30 p-6">
+                <div class="flex justify-between items-center mb-6">
+                  <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg shadow-purple-500/25 flex items-center justify-center">
+                      <KeyIcon class="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100">Deploy Tokens</h3>
+                      <p class="text-xs text-gray-500 dark:text-gray-400">One-click installation scripts for child nodes</p>
+                    </div>
+                  </div>
+                  <button
+                    @click="showTokenCreateModal = true"
+                    class="group inline-flex items-center px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-200 transform hover:scale-105 shadow-lg shadow-purple-500/25 text-sm"
+                  >
+                    <PlusIcon class="w-4 h-4 mr-2" />
+                    Create Token
+                  </button>
+                </div>
+
+                <!-- Tokens Table -->
+                <div v-if="tokenStore.tokens.length > 0" class="overflow-x-auto">
+                  <table class="w-full">
+                    <thead>
+                      <tr class="text-left text-sm font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200/50 dark:border-gray-600/50">
+                        <th class="pb-3 pr-4">Node Name</th>
+                        <th class="pb-3 pr-4">Location</th>
+                        <th class="pb-3 pr-4">Status</th>
+                        <th class="pb-3 pr-4">Expires</th>
+                        <th class="pb-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="token in tokenStore.tokens"
+                        :key="token.id"
+                        class="border-b border-gray-200/30 dark:border-gray-600/30 hover:bg-gray-50/50 dark:hover:bg-gray-700/30 transition-colors"
+                      >
+                        <td class="py-4 pr-4">
+                          <span class="font-medium text-gray-900 dark:text-gray-100">{{ token.name }}</span>
+                        </td>
+                        <td class="py-4 pr-4 text-gray-600 dark:text-gray-400">
+                          {{ token.location }}
+                        </td>
+                        <td class="py-4 pr-4">
+                          <span
+                            class="px-2.5 py-1 rounded-full text-xs font-medium"
+                            :class="tokenStore.getStatusClass(token.status)"
+                          >
+                            {{ tokenStore.getStatusText(token.status) }}
+                          </span>
+                        </td>
+                        <td class="py-4 pr-4 text-sm text-gray-600 dark:text-gray-400">
+                          {{ tokenStore.getTimeRemaining(token.expires_at) }}
+                        </td>
+                        <td class="py-4 text-right">
+                          <div class="flex justify-end space-x-2">
+                            <button
+                              v-if="token.status === 'pending'"
+                              @click="showInstallScript(token)"
+                              class="p-2 text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-all duration-200"
+                              title="View Install Script"
+                            >
+                              <CommandLineIcon class="w-4 h-4" />
+                            </button>
+                            <button
+                              @click="deleteToken(token.id)"
+                              class="p-2 text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all duration-200"
+                              title="Delete Token"
+                            >
+                              <TrashIcon class="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <!-- Empty State -->
+                <div v-else class="text-center py-12">
+                  <div class="w-16 h-16 bg-gradient-to-br from-purple-100 to-purple-200 dark:from-purple-900/30 dark:to-purple-800/30 rounded-2xl shadow-lg flex items-center justify-center mx-auto mb-4">
+                    <KeyIcon class="w-8 h-8 text-purple-500 dark:text-purple-400" />
+                  </div>
+                  <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">No deploy tokens yet</h4>
+                  <p class="text-gray-500 dark:text-gray-400 mb-4 text-sm">Create a token to generate one-click install scripts for child nodes</p>
+                  <button
+                    @click="showTokenCreateModal = true"
+                    class="inline-flex items-center px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 focus:outline-none transition-all duration-200 text-sm"
+                  >
+                    <PlusIcon class="w-4 h-4 mr-2" />
+                    Create Your First Token
+                  </button>
+                </div>
+              </div>
+            </div>
+          </transition>
 
           <!-- Enhanced Nodes Cards -->
           <div class="animate-slide-up" style="animation-delay: 0.5s;">
@@ -341,19 +449,19 @@
               enter-to-class="opacity-100 scale-100"
             >
               <div v-if="nodes.length === 0" class="text-center py-16">
-                <div class="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 rounded-3xl shadow-lg flex items-center justify-center mx-auto mb-8 animate-bounce-gentle">
-                  <ServerIcon class="w-12 h-12 text-gray-400 dark:text-gray-500" />
+                <div class="w-24 h-24 bg-gradient-to-br from-purple-100 to-purple-200 dark:from-purple-900/30 dark:to-purple-800/30 rounded-3xl shadow-lg flex items-center justify-center mx-auto mb-8 animate-bounce-gentle">
+                  <KeyIcon class="w-12 h-12 text-purple-500 dark:text-purple-400" />
                 </div>
                 <h3 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">No nodes configured</h3>
                 <p class="text-gray-500 dark:text-gray-400 mb-8 max-w-md mx-auto text-lg">
-                  Get started by adding your first network node to begin monitoring and management.
+                  Deploy agent nodes using one-click installation tokens. Create a token and run the generated script on your servers.
                 </p>
                 <button
-                  @click="showCreateModal = true"
-                  class="group inline-flex items-center px-8 py-4 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-2xl hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all duration-200 transform hover:scale-105 shadow-lg shadow-primary-500/25 text-lg font-semibold"
+                  @click="showTokensSection = true; showTokenCreateModal = true"
+                  class="group inline-flex items-center px-8 py-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-2xl hover:from-purple-700 hover:to-purple-800 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-200 transform hover:scale-105 shadow-lg shadow-purple-500/25 text-lg font-semibold"
                 >
-                  <PlusIcon class="w-6 h-6 mr-3 transition-transform duration-200 group-hover:rotate-90" />
-                  Add Your First Node
+                  <KeyIcon class="w-6 h-6 mr-3" />
+                  Create Deploy Token
                 </button>
               </div>
             </transition>
@@ -373,11 +481,11 @@
       </transition>
     </div>
 
-    <!-- Enhanced Create/Edit Modal -->
+    <!-- Edit Node Modal (Agent mode - edit only, no create) -->
     <NodeEditModal
-      v-if="showCreateModal || showEditModal"
+      v-if="showEditModal"
       :node="editingNode"
-      :is-edit="showEditModal"
+      :is-edit="true"
       @close="closeModal"
       @save="saveNode"
     />
@@ -439,23 +547,42 @@
         </div>
       </div>
     </transition>
+
+    <!-- Token Create Modal -->
+    <TokenCreateModal
+      v-if="showTokenCreateModal"
+      @close="showTokenCreateModal = false"
+      @created="handleTokenCreated"
+    />
+
+    <!-- Install Script Modal -->
+    <InstallScriptModal
+      v-if="selectedToken"
+      :token="selectedToken"
+      @close="selectedToken = null"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { 
-  ArrowLeftIcon, 
-  PlusIcon, 
-  PencilIcon, 
-  TrashIcon, 
-  ServerIcon, 
+import {
+  ArrowLeftIcon,
+  PlusIcon,
+  PencilIcon,
+  TrashIcon,
+  ServerIcon,
   ArrowPathIcon,
   ArrowRightOnRectangleIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  KeyIcon,
+  CommandLineIcon
 } from '@heroicons/vue/24/outline'
 import NodeEditModal from './NodeEditModal.vue'
+import TokenCreateModal from './TokenCreateModal.vue'
+import InstallScriptModal from './InstallScriptModal.vue'
 import { useNodeAdminStore } from '@/stores/nodeAdmin'
+import { useTokenAdminStore } from '@/stores/tokenAdmin'
 import { useNodesStore } from '@/stores/nodes'
 import { useAppStore } from '@/stores/app'
 import { storeToRefs } from 'pinia'
@@ -463,6 +590,7 @@ import { storeToRefs } from 'pinia'
 const emit = defineEmits(['back'])
 
 const adminStore = useNodeAdminStore()
+const tokenStore = useTokenAdminStore()
 const nodesStore = useNodesStore()
 const appStore = useAppStore()
 
@@ -484,13 +612,17 @@ const {
 const apiKey = ref('')
 const showPassword = ref(false)
 const authenticating = ref(false)
-const showCreateModal = ref(false)
 const showEditModal = ref(false)
 const showDeleteModal = ref(false)
 const editingNode = ref(null)
 const deletingNode = ref(null)
 const deleting = ref(false)
 const copyingStates = ref({}) // 追踪每个节点的复制状态
+
+// Token management state
+const showTokensSection = ref(false)
+const showTokenCreateModal = ref(false)
+const selectedToken = ref(null)
 
 // 删除自定义的connectivity测试逻辑，直接使用首页的延迟测试
 // Test all nodes connectivity - 复用首页逻辑
@@ -639,24 +771,19 @@ const confirmDelete = async () => {
 }
 
 const closeModal = () => {
-  showCreateModal.value = false
   showEditModal.value = false
   editingNode.value = null
 }
 
 const saveNode = async (nodeData) => {
   try {
-    if (showEditModal.value && editingNode.value?.id) {
+    if (editingNode.value?.id) {
       await adminStore.updateNode(editingNode.value.id, nodeData)
       appStore.showToast('Node updated successfully!', 'success', 2000)
-    } else {
-      await adminStore.createNode(nodeData)
-      appStore.showToast('Node created successfully!', 'success', 2000)
+      closeModal()
     }
-    closeModal()
   } catch (error) {
     console.error('Failed to save node:', error)
-    // 显示具体的错误信息
     const errorMessage = error.response?.data?.error || error.message || 'Failed to save node'
     appStore.showToast(errorMessage, 'error', 4000)
   }
@@ -698,6 +825,51 @@ const copyToClipboard = async (text, nodeId = null) => {
         copyingStates.value[nodeId] = false
       }
     }, 1000)
+  }
+}
+
+// Token management functions
+const toggleTokensSection = async () => {
+  showTokensSection.value = !showTokensSection.value
+  if (showTokensSection.value) {
+    try {
+      await tokenStore.fetchTokens()
+    } catch (error) {
+      console.error('Failed to fetch tokens:', error)
+      appStore.showToast('Failed to load tokens', 'error', 3000)
+    }
+  }
+}
+
+const handleTokenCreated = async (tokenData) => {
+  try {
+    const newToken = await tokenStore.createToken(tokenData)
+    showTokenCreateModal.value = false
+    selectedToken.value = newToken
+    appStore.showToast('Token created! Copy the install script.', 'success', 3000)
+  } catch (error) {
+    console.error('Failed to create token:', error)
+    const errorMessage = error.response?.data?.error || error.message || 'Failed to create token'
+    appStore.showToast(errorMessage, 'error', 4000)
+  }
+}
+
+const showInstallScript = (token) => {
+  if (token.status !== 'pending') {
+    appStore.showToast('This token has already been used or expired', 'warning', 3000)
+    return
+  }
+  selectedToken.value = token
+}
+
+const deleteToken = async (tokenId) => {
+  if (!confirm('Are you sure you want to delete this token?')) return
+  try {
+    await tokenStore.deleteToken(tokenId)
+    appStore.showToast('Token deleted successfully', 'success', 2000)
+  } catch (error) {
+    console.error('Failed to delete token:', error)
+    appStore.showToast('Failed to delete token', 'error', 3000)
   }
 }
 </script>
