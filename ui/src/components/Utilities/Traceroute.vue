@@ -10,7 +10,8 @@ const {
   selectedNodeName,
   selectedNodeLocation,
   startTool,
-  stopTool
+  stopTool,
+  finishTool
 } = useNodeTool()
 
 const output = ref('')
@@ -24,11 +25,14 @@ const handleTracerouteMessage = (e) => {
     if (data.output) {
       output.value += data.output
     }
+    if (data.finished) {
+      finishTool()
+    }
   } catch (error) {
     // If not JSON, treat as plain text
     output.value += e.data
   }
-  
+
   // Auto scroll to bottom
   setTimeout(() => {
     const container = outputRef.value

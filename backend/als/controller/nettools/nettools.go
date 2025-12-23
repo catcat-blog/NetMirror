@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/X-Zero-L/als/als/client"
@@ -120,8 +121,12 @@ func HandleNetworkTool(toolName string) gin.HandlerFunc {
 			Content: fmt.Sprintf(`{"output":"Starting %s to %s...\n","finished":false}`, tool.Name, ip),
 		}
 
-		// Writer function (exactly like iperf3)
+		// WaitGroup to ensure all output is sent before completion message
+		var wg sync.WaitGroup
+
+		// Writer function with WaitGroup synchronization
 		writer := func(pipe io.ReadCloser, err error) {
+			defer wg.Done()
 			if err != nil {
 				return
 			}
@@ -139,11 +144,13 @@ func HandleNetworkTool(toolName string) gin.HandlerFunc {
 			}
 		}
 
+		wg.Add(2)
 		go writer(cmd.StdoutPipe())
 		go writer(cmd.StderrPipe())
 
 		err := cmd.Start()
 		if err != nil {
+			wg.Wait() // Wait for goroutines even on error
 			c.JSON(400, &gin.H{
 				"success": false,
 				"error":   err.Error(),
@@ -152,6 +159,7 @@ func HandleNetworkTool(toolName string) gin.HandlerFunc {
 		}
 
 		cmd.Wait()
+		wg.Wait() // Wait for all output to be sent before completion message
 
 		// Send completion message
 		clientSession.Channel <- &client.Message{

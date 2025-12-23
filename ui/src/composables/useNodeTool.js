@@ -126,8 +126,7 @@ export function useNodeTool() {
 
     try {
       await sendRequest(method, data, abortController.signal)
-      // 请求完成后自动停止工具
-      stopTool()
+      // 不在这里调用 stopTool() - 让事件处理器在收到 finished 信号时调用 finishTool()
       return true
     } catch (error) {
       console.error(`${method} error:`, error)
@@ -137,14 +136,21 @@ export function useNodeTool() {
     }
   }
 
-  // 停止工具操作
+  // 停止工具操作 (用于手动停止或错误情况)
   const stopTool = () => {
     working.value = false
     removeAllEventListeners()
-    
+
     if (abortController) {
       abortController.abort('Tool stopped')
     }
+  }
+
+  // 完成工具操作 (用于工具正常完成时)
+  const finishTool = () => {
+    working.value = false
+    removeAllEventListeners()
+    // 不调用 abort - 请求已经完成
   }
 
   // 组件卸载时清理
@@ -169,6 +175,7 @@ export function useNodeTool() {
     removeEventListener,
     removeAllEventListeners,
     startTool,
-    stopTool
+    stopTool,
+    finishTool
   }
 }
