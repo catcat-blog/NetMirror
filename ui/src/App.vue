@@ -378,8 +378,21 @@ onUnmounted(() => {
       </footer>
     </div>
 
-    <!-- Floating Action Button Group -->
-    <div class="fixed bottom-8 right-8 z-50">
+    <!-- Admin Button (Always Visible) -->
+    <button
+      @click="toggleAdminMode"
+      class="fixed bottom-8 right-8 z-50 w-12 h-12 flex items-center justify-center bg-white dark:bg-gray-700 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-all duration-200 transform hover:scale-110 border border-gray-200 dark:border-gray-600"
+      :class="adminMode ? 'ring-2 ring-primary-500' : ''"
+      title="Admin Panel"
+    >
+      <svg class="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+      </svg>
+    </button>
+
+    <!-- Floating Action Button Group (scroll to top, theme) -->
+    <div class="fixed bottom-8 right-24 z-50">
       <transition
         enter-active-class="transition-all duration-300 ease-out"
         enter-from-class="opacity-0 translate-y-4"
@@ -388,42 +401,14 @@ onUnmounted(() => {
         leave-from-class="opacity-100 translate-y-0"
         leave-to-class="opacity-0 translate-y-4"
       >
-        <div v-if="showFab" class="relative group flex flex-col items-center space-y-2">
-          <!-- Action Buttons (hidden by default, shown on hover) -->
-          <div class="absolute bottom-14 space-y-2 transition-all duration-300 opacity-0 group-hover:opacity-100 group-hover:-translate-y-2">
-            <!-- Scroll to Top -->
-            <button @click="scrollToTop" class="w-14 h-14 flex items-center justify-center bg-white dark:bg-gray-700 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-all duration-200 transform hover:scale-110">
-              <svg class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
-            </button>
-            <!-- Language Selector -->
-            <div class="w-14 h-14 flex items-center justify-center bg-white dark:bg-gray-700 rounded-full shadow-lg" style="display: none;">
-              <LanguageSelector 
-                :current-lang="currentLangCode" 
-                :lang-list="langList"
-                @change="handleLangChange" 
-                :show-label="false"
-              />
-            </div>
-            <!-- Theme Toggle -->
-            <div class="w-14 h-14 flex items-center justify-center bg-white dark:bg-gray-700 rounded-full shadow-lg">
-              <ThemeToggle :is-dark="isDark" @toggle="toggleTheme" />
-            </div>
-            <!-- Admin Panel -->
-            <button 
-              @click="toggleAdminMode" 
-              class="w-14 h-14 flex items-center justify-center bg-white dark:bg-gray-700 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-all duration-200 transform hover:scale-110"
-              title="Admin Panel"
-            >
-              <svg class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-              </svg>
-            </button>
+        <div v-if="showFab" class="flex items-center space-x-2">
+          <!-- Theme Toggle -->
+          <div class="w-12 h-12 flex items-center justify-center bg-white dark:bg-gray-700 rounded-full shadow-lg border border-gray-200 dark:border-gray-600">
+            <ThemeToggle :is-dark="isDark" @toggle="toggleTheme" />
           </div>
-          
-          <!-- Main FAB -->
-          <button class="w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-600 text-white rounded-full shadow-2xl shadow-primary-500/30 flex items-center justify-center transform group-hover:rotate-90 transition-transform duration-300 focus:outline-none">
-            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+          <!-- Scroll to Top -->
+          <button @click="scrollToTop" class="w-12 h-12 flex items-center justify-center bg-white dark:bg-gray-700 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-all duration-200 transform hover:scale-110 border border-gray-200 dark:border-gray-600">
+            <svg class="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
           </button>
         </div>
       </transition>
