@@ -28,15 +28,6 @@ const UtilitiesCard = defineAsyncComponent({
   ])
 })
 
-const BGPCard = defineAsyncComponent({
-  loader: () => import('@/components/Utilities/BGP.vue'),
-  delay: 300,
-  timeout: 10000,
-  loadingComponent: () => h('div', { class: 'flex items-center justify-center p-8' }, [
-    h('div', { class: 'w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin' })
-  ])
-})
-
 const TrafficCard = defineAsyncComponent({
   loader: () => import('@/components/TrafficDisplay.vue'),
   delay: 300,
@@ -69,7 +60,6 @@ const currentLangCode = computed(() => appStore.language)
 const tabs = [
   { id: 'info', label: 'Network Information', icon: 'M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9' },
   { id: 'tools', label: 'Network Tools', icon: 'M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z' },
-  { id: 'bgp', label: 'BGP Topology', icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
   { id: 'speedtest', label: 'Speed Test', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
   { id: 'traffic', label: 'Traffic Monitor', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' }
 ]
@@ -361,7 +351,6 @@ onUnmounted(() => {
                   >
                     <InfoCard v-if="tab.id === 'info'" />
                     <UtilitiesCard v-else-if="tab.id === 'tools'" />
-                    <BGPCard v-else-if="tab.id === 'bgp'" />
                     <SpeedtestCard v-else-if="tab.id === 'speedtest'" />
                     <TrafficCard v-else-if="tab.id === 'traffic'" />
                   </div>

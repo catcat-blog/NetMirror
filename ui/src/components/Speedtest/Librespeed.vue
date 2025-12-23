@@ -215,10 +215,8 @@ const startOrStopSpeedtest = (force = false) => {
   charts.value.upload.data = []
   charts.value.upload.categories = []
 
-  // 构造 Worker URL - 使用绝对路径
-  const workerUrl = baseUrl.value
-    ? `${baseUrl.value}/speedtest_worker.js`
-    : `${window.location.origin}/speedtest_worker.js`
+  // Worker 必须从本地加载（同源限制），不能从远程节点加载
+  const workerUrl = `${window.location.origin}/speedtest_worker.js`
 
   try {
     workerInstance = new Worker(workerUrl)

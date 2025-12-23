@@ -2,7 +2,6 @@ package als
 
 import (
 	"fmt"
-	"io"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -39,52 +38,7 @@ func SetupHttpRoute(e *gin.Engine) {
 	})
 
 	e.GET("/session", session.Handle)
-	
-	// BGP data proxy endpoint using RIPE Stat API with 24-hour caching
-	e.GET("/bgp/data/:asn", func(c *gin.Context) {
-		asn := c.Param("asn")
 
-		// Check cache first
-		if cachedData, found := config.GetBGPGraphCached(asn, "neighbours"); found {
-			c.Header("Content-Type", "application/json")
-			c.Header("Cache-Control", "public, max-age=86400")
-			c.Header("X-Cache", "HIT")
-			c.Data(200, "application/json", cachedData)
-			return
-		}
-
-		// Fetch from RIPE Stat API
-		url := fmt.Sprintf("https://stat.ripe.net/data/asn-neighbours/data.json?resource=AS%s&sourceapp=NetMirror", asn)
-
-		resp, err := http.Get(url)
-		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to fetch BGP data from RIPE Stat"})
-			return
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != 200 {
-			c.JSON(resp.StatusCode, gin.H{"error": "BGP data not found"})
-			return
-		}
-
-		// Read response data
-		data, err := io.ReadAll(resp.Body)
-		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to read BGP data"})
-			return
-		}
-
-		// Cache the result for 24 hours
-		config.SetBGPGraphCache(asn, "neighbours", data)
-
-		// Return the JSON data
-		c.Header("Content-Type", "application/json")
-		c.Header("Cache-Control", "public, max-age=86400")
-		c.Header("X-Cache", "MISS")
-		c.Data(200, "application/json", data)
-	})
-	
 	// Node management endpoints (no session required for cross-node functionality)
 	// Node management API (public endpoints)
 	e.GET("/nodes", nodes.GetNodes)
