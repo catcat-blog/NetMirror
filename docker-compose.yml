@@ -7,6 +7,8 @@ services:
       dockerfile: Dockerfile
     container_name: looking-glass
     restart: always
+    cap_add:
+      - NET_RAW
     network_mode: host
     env_file:
       - .env
