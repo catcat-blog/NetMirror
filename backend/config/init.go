@@ -110,6 +110,20 @@ func LoadWebConfig() {
 				updateLocation()
 			}
 		}()
+	} else {
+		// Peachy patch: PUBLIC_IPV4/PUBLIC_IPV6 was set via env var.
+		// updatePublicIP() is skipped, but we still need BGP/ASN lookup
+		// and location detection to run for the configured IP.
+		go func() {
+			if Config.PublicIPv4 != "" {
+				updateBGPInfo(Config.PublicIPv4)
+			} else if Config.PublicIPv6 != "" {
+				updateBGPInfo(Config.PublicIPv6)
+			}
+			if Config.Location == "" {
+				updateLocation()
+			}
+		}()
 	}
 
 }
@@ -143,7 +157,7 @@ func LoadSponsorMessage() {
 	// 检查是否为URL
 	if strings.HasPrefix(Config.SponsorMessage, "http://") || strings.HasPrefix(Config.SponsorMessage, "https://") {
 		lowerURL := strings.ToLower(originalMessage)
-		
+
 		// 如果是.md链接，下载内容作为markdown
 		if strings.HasSuffix(lowerURL, ".md") {
 			resp, err := http.Get(Config.SponsorMessage)
@@ -230,10 +244,10 @@ func LoadLogoType() {
 	if len(runes) <= 5 && len(runes) > 0 {
 		for _, r := range runes {
 			if r >= 0x1F600 && r <= 0x1F64F || // 表情符号
-			   r >= 0x1F300 && r <= 0x1F5FF || // 其他符号
-			   r >= 0x1F680 && r <= 0x1F6FF || // 交通和地图符号
-			   r >= 0x2600 && r <= 0x26FF ||   // 杂项符号
-			   r >= 0x2700 && r <= 0x27BF {    // 装饰符号
+				r >= 0x1F300 && r <= 0x1F5FF || // 其他符号
+				r >= 0x1F680 && r <= 0x1F6FF || // 交通和地图符号
+				r >= 0x2600 && r <= 0x26FF || // 杂项符号
+				r >= 0x2700 && r <= 0x27BF { // 装饰符号
 				Config.LogoType = "emoji"
 				log.Default().Println("Logo type detected: emoji")
 				return
@@ -253,41 +267,41 @@ func fetchFaviconFromURL(websiteURL string) string {
 	if err != nil {
 		return ""
 	}
-	
+
 	// 构造基础URL
 	baseURL := fmt.Sprintf("%s://%s", parsedURL.Scheme, parsedURL.Host)
-	
+
 	// 尝试多个常见的favicon路径
 	possiblePaths := []string{
 		"/favicon.ico",
-		"/favicon.png", 
+		"/favicon.png",
 		"/favicon.svg",
 		"/apple-touch-icon.png",
 		"/apple-touch-icon-precomposed.png",
 	}
-	
+
 	// 创建HTTP客户端，设置超时
 	client := &http.Client{
 		Timeout: 5 * time.Second,
 	}
-	
+
 	for _, path := range possiblePaths {
 		faviconURL := baseURL + path
-		
+
 		// 发送HEAD请求检查favicon是否存在
 		resp, err := client.Head(faviconURL)
 		if err != nil {
 			continue
 		}
 		resp.Body.Close()
-		
+
 		// 如果状态码是200，说明找到了favicon
 		if resp.StatusCode == 200 {
 			log.Default().Printf("Found favicon at: %s", faviconURL)
 			return faviconURL
 		}
 	}
-	
+
 	// 如果都找不到，尝试解析HTML页面中的favicon链接
 	return parseFaviconFromHTML(websiteURL, client)
 }
@@ -299,27 +313,27 @@ func parseFaviconFromHTML(websiteURL string, client *http.Client) string {
 		return ""
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != 200 {
 		return ""
 	}
-	
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return ""
 	}
-	
+
 	html := string(body)
-	
+
 	// 解析HTML中的favicon链接
 	// 查找 <link rel="icon" href="...">
 	iconPattern := `<link[^>]*rel=["'](?:icon|shortcut icon)["'][^>]*href=["']([^"']+)["']`
 	re := regexp.MustCompile(iconPattern)
 	matches := re.FindStringSubmatch(html)
-	
+
 	if len(matches) > 1 {
 		faviconPath := matches[1]
-		
+
 		// 如果是相对路径，转换为绝对路径
 		if strings.HasPrefix(faviconPath, "//") {
 			parsedURL, _ := url.Parse(websiteURL)
@@ -331,6 +345,6 @@ func parseFaviconFromHTML(websiteURL string, client *http.Client) string {
 			return faviconPath
 		}
 	}
-	
+
 	return ""
 }
